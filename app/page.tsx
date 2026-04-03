@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -182,9 +182,14 @@ export default function Home() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-end">
+          <motion.div
+            className="flex items-center justify-end"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
             <ModeToggle />
-          </div>
+          </motion.div>
           <motion.div
             className="text-center"
             initial={{ opacity: 0, y: -20 }}
@@ -194,8 +199,15 @@ export default function Home() {
             <div className="mb-4 flex items-center justify-center gap-3">
               <motion.div
                 className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/25"
+                animate={{
+                  boxShadow: [
+                    "0 4px 20px rgba(139, 92, 246, 0.25)",
+                    "0 4px 30px rgba(139, 92, 246, 0.4)",
+                    "0 4px 20px rgba(139, 92, 246, 0.25)",
+                  ],
+                }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 whileHover={{ scale: 1.05, rotate: 5 }}
-                transition={{ type: "spring", stiffness: 400, damping: 17 }}
               >
                 <Sparkles className="h-6 w-6 text-white" />
               </motion.div>
@@ -210,104 +222,176 @@ export default function Home() {
         </div>
 
         {/* Max Models Alert */}
-        {showMaxModelsAlert && (
-          <Alert className="mb-4 border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/50 dark:text-orange-200">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              You can only compare up to {MAX_MODELS} models at a time. Please deselect a model before selecting another.
-            </AlertDescription>
-          </Alert>
-        )}
+        <AnimatePresence>
+          {showMaxModelsAlert && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Alert className="mb-4 border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/50 dark:text-orange-200">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  You can only compare up to {MAX_MODELS} models at a time. Please deselect a model before selecting another.
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Model Selection */}
-        <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-              <Bot className="h-5 w-5 text-violet-500" />
-              Select Models ({selectedModels.length}/{MAX_MODELS} selected)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
-              <Info className="mr-1 inline h-4 w-4" />
-              You can select up to {MAX_MODELS} models to compare simultaneously per API key.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {AVAILABLE_MODELS.map((model) => (
-                <button
-                  key={model.id}
-                  onClick={() => handleModelToggle(model.id)}
-                  className={`group relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                    selectedModels.includes(model.id)
-                      ? "bg-zinc-900 text-white shadow-lg shadow-zinc-900/25 dark:bg-zinc-100 dark:text-zinc-900 dark:shadow-zinc-100/10"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                  }`}
-                >
-                  <span className={`h-2 w-2 rounded-full ${model.color}`} />
-                  <span>{model.name}</span>
-                  <span className="text-xs opacity-60">({model.provider})</span>
-                  {selectedModels.includes(model.id) && (
-                    <CheckCircle2 className="ml-1 h-3.5 w-3.5" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+        >
+          <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                <Bot className="h-5 w-5 text-violet-500" />
+                Select Models ({selectedModels.length}/{MAX_MODELS} selected)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <motion.p
+                className="mb-4 text-sm text-zinc-500 dark:text-zinc-400"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                <Info className="mr-1 inline h-4 w-4" />
+                You can select up to {MAX_MODELS} models to compare simultaneously per API key.
+              </motion.p>
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_MODELS.map((model, index) => (
+                  <motion.button
+                    key={model.id}
+                    onClick={() => handleModelToggle(model.id)}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.02, duration: 0.2 }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`group relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                      selectedModels.includes(model.id)
+                        ? "bg-zinc-900 text-white shadow-lg shadow-zinc-900/25 dark:bg-zinc-100 dark:text-zinc-900 dark:shadow-zinc-100/10"
+                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                    }`}
+                  >
+                    <motion.span
+                      className={`h-2 w-2 rounded-full ${model.color}`}
+                      animate={selectedModels.includes(model.id) ? { scale: [1, 1.2, 1] } : {}}
+                      transition={{ duration: 0.3 }}
+                    />
+                    <span>{model.name}</span>
+                    <span className="text-xs opacity-60">({model.provider})</span>
+                    <AnimatePresence>
+                      {selectedModels.includes(model.id) && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0 }}
+                          transition={{ duration: 0.15 }}
+                        >
+                          <CheckCircle2 className="ml-1 h-3.5 w-3.5" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* Prompt Input */}
-        <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-              <MessageSquare className="h-5 w-5 text-violet-500" />
-              Your Prompt
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Enter your prompt here... Compare how different models respond to the same question!"
-              className="min-h-[120px] w-full resize-y rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 placeholder-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-            />
-            <div className="mt-4 flex items-center justify-between">
-              <div className="text-sm text-zinc-500">
-                {prompt.length} characters
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                <MessageSquare className="h-5 w-5 text-violet-500" />
+                Your Prompt
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <motion.textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Enter your prompt here... Compare how different models respond to the same question!"
+                className="min-h-[120px] w-full resize-y rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 placeholder-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                whileFocus={{ borderColor: "#8b5cf6", boxShadow: "0 0 0 3px rgba(139, 92, 246, 0.1)" }}
+              />
+              <div className="mt-4 flex items-center justify-between">
+                <motion.div
+                  className="text-sm text-zinc-500"
+                  animate={{ opacity: prompt.length > 0 ? 1 : 0.5 }}
+                >
+                  {prompt.length} characters
+                </motion.div>
+                <motion.div whileHover={{ scale: prompt.trim() && selectedModels.length > 0 && !isLoading ? 1.02 : 1 }} whileTap={{ scale: 0.98 }}>
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!prompt.trim() || selectedModels.length === 0 || isLoading}
+                    className="gap-2 bg-linear-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Running...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        Compare Models
+                      </>
+                    )}
+                  </Button>
+                </motion.div>
               </div>
-              <Button
-                onClick={handleSubmit}
-                disabled={!prompt.trim() || selectedModels.length === 0 || isLoading}
-                className="gap-2 bg-linear-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Running...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    Compare Models
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* Results */}
-        {responses.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-                Results
-              </h2>
-              <Badge variant="secondary" className="text-sm">
-                {responses.filter((r) => !r.loading).length}/{responses.length} completed
-              </Badge>
-            </div>
+        <AnimatePresence>
+          {responses.length > 0 && (
+            <motion.div
+              className="space-y-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="flex items-center justify-between"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                  Results
+                </h2>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <Badge variant="secondary" className="text-sm">
+                    {responses.filter((r) => !r.loading).length}/{responses.length} completed
+                  </Badge>
+                </motion.div>
+              </motion.div>
 
             <Tabs defaultValue="grid" className="w-full">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
               <TabsList className="mb-4">
                 <TabsTrigger value="grid" className="gap-2">
                   <Zap className="h-4 w-4" />
@@ -318,16 +402,22 @@ export default function Home() {
                   List View
                 </TabsTrigger>
               </TabsList>
+              </motion.div>
 
               <TabsContent value="grid">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {responses.map((response) => {
+                  {responses.map((response, index) => {
                     const modelInfo = getModelInfo(response.model);
                     return (
-                      <Card
+                      <motion.div
                         key={response.model}
-                        className="flex flex-col border-zinc-200/50 bg-white/90 shadow-lg shadow-zinc-200/20 backdrop-blur-sm transition-all duration-300 hover:shadow-xl dark:border-zinc-800/50 dark:bg-zinc-900/90 dark:shadow-zinc-950/20"
+                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ delay: index * 0.1, duration: 0.3 }}
                       >
+                        <Card
+                          className="flex flex-col border-zinc-200/50 bg-white/90 shadow-lg shadow-zinc-200/20 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 dark:border-zinc-800/50 dark:bg-zinc-900/90 dark:shadow-zinc-950/20"
+                        >
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -356,14 +446,40 @@ export default function Home() {
                         <CardContent className="flex-1">
                           {response.loading ? (
                             <div className="flex h-40 flex-col items-center justify-center gap-3">
-                              <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
-                              <span className="text-sm text-zinc-500">Generating response...</span>
+                              <motion.div
+                                animate={{
+                                  rotate: 360,
+                                  scale: [1, 1.1, 1],
+                                }}
+                                transition={{
+                                  rotate: { duration: 1, repeat: Infinity, ease: "linear" },
+                                  scale: { duration: 0.5, repeat: Infinity, ease: "easeInOut" },
+                                }}
+                              >
+                                <Loader2 className="h-8 w-8 text-violet-500" />
+                              </motion.div>
+                              <motion.div
+                                initial={{ opacity: 0.5 }}
+                                animate={{ opacity: [0.5, 1, 0.5] }}
+                                transition={{ duration: 1.5, repeat: Infinity }}
+                              >
+                                <span className="text-sm text-zinc-500">Generating response...</span>
+                              </motion.div>
                             </div>
                           ) : response.error ? (
-                            <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
-                              <AlertCircle className="h-8 w-8 text-red-500" />
+                            <motion.div
+                              className="flex h-40 flex-col items-center justify-center gap-2 text-center"
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                            >
+                              <motion.div
+                                animate={{ scale: [1, 1.1, 1] }}
+                                transition={{ duration: 0.5, repeat: Infinity }}
+                              >
+                                <AlertCircle className="h-8 w-8 text-red-500" />
+                              </motion.div>
                               <span className="text-sm text-red-600">{response.error}</span>
-                            </div>
+                            </motion.div>
                           ) : (
                             <ScrollArea className="h-64">
                               <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mb-2 prose-headings:mt-4 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
@@ -400,27 +516,47 @@ export default function Home() {
                         </CardContent>
                         {response.content && !response.loading && (
                           <div className="px-6 pb-4">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copyToClipboard(response.content, response.model)}
-                              className="gap-2"
+                            <motion.div
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
                             >
-                              {copiedModel === response.model ? (
-                                <>
-                                  <Check className="h-4 w-4 text-green-500" />
-                                  Copied!
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-4 w-4" />
-                                  Copy
-                                </>
-                              )}
-                            </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(response.content, response.model)}
+                                className="gap-2"
+                              >
+                                <AnimatePresence mode="wait">
+                                  {copiedModel === response.model ? (
+                                    <motion.div
+                                      key="copied"
+                                      initial={{ scale: 0, opacity: 0 }}
+                                      animate={{ scale: 1, opacity: 1 }}
+                                      exit={{ scale: 0, opacity: 0 }}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <Check className="h-4 w-4 text-green-500" />
+                                      Copied!
+                                    </motion.div>
+                                  ) : (
+                                    <motion.div
+                                      key="copy"
+                                      initial={{ scale: 0, opacity: 0 }}
+                                      animate={{ scale: 1, opacity: 1 }}
+                                      exit={{ scale: 0, opacity: 0 }}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                      Copy
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </Button>
+                            </motion.div>
                           </div>
                         )}
                       </Card>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -428,12 +564,18 @@ export default function Home() {
 
               <TabsContent value="list">
                 <div className="space-y-4">
-                  {responses.map((response) => {
+                  {responses.map((response, index) => {
                     const modelInfo = getModelInfo(response.model);
                     return (
+                      <motion.div
+                        key={response.model}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1, duration: 0.3 }}
+                      >
                       <Card
                         key={response.model}
-                        className="border-zinc-200/50 bg-white/90 shadow-lg shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/90 dark:shadow-zinc-950/20"
+                        className="border-zinc-200/50 bg-white/90 shadow-lg shadow-zinc-200/20 backdrop-blur-sm transition-all duration-300 hover:shadow-xl dark:border-zinc-800/50 dark:bg-zinc-900/90 dark:shadow-zinc-950/20"
                       >
                         <CardHeader>
                           <div className="flex items-center justify-between">
@@ -527,13 +669,15 @@ export default function Home() {
                           )}
                         </CardContent>
                       </Card>
+                      </motion.div>
                     );
                   })}
                 </div>
               </TabsContent>
             </Tabs>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Footer */}
         <div className="mt-12 text-center text-sm text-zinc-500">
