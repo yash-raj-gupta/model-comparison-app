@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ModeToggle } from "./components/mode-toggle";
 import {
   Loader2,
   Send,
@@ -176,21 +178,35 @@ export default function Home() {
     };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-100 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
+    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-100 transition-colors duration-500 ease-out dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="mb-4 flex items-center justify-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/25">
-              <Sparkles className="h-6 w-6 text-white" />
-            </div>
-            <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Model Arena
-            </h1>
+        <div className="mb-8">
+          <div className="flex items-center justify-end">
+            <ModeToggle />
           </div>
-          <p className="text-lg text-zinc-600 dark:text-zinc-400">
-            Compare outputs from multiple LLMs simultaneously
-          </p>
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+          >
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <motion.div
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/25"
+                whileHover={{ scale: 1.05, rotate: 5 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+              >
+                <Sparkles className="h-6 w-6 text-white" />
+              </motion.div>
+              <h1 className="bg-linear-to-r from-zinc-900 to-zinc-600 bg-clip-text text-4xl font-bold tracking-tight text-transparent dark:from-zinc-100 dark:to-zinc-400">
+                Model Arena
+              </h1>
+            </div>
+            <p className="text-lg text-zinc-600 transition-colors duration-300 dark:text-zinc-400">
+              Compare outputs from multiple LLMs simultaneously
+            </p>
+          </motion.div>
         </div>
 
         {/* Max Models Alert */}

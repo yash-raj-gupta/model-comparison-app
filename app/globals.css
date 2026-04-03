@@ -123,8 +123,28 @@
   }
   body {
     @apply bg-background text-foreground;
+    transition: background-color 0.5s cubic-bezier(0.23, 1, 0.32, 1),
+                color 0.5s cubic-bezier(0.23, 1, 0.32, 1);
   }
   html {
     @apply font-sans;
   }
+}
+
+/* Smooth theme transitions for common properties */
+html.dark,
+html.light {
+  transition: background-color 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Smooth transitions for cards, buttons, and interactive elements */
+.card-transition {
+  transition: background-color 0.4s ease,
+              border-color 0.4s ease,
+              box-shadow 0.4s ease;
+}
+
+/* Theme transition for gradient backgrounds */
+.gradient-transition {
+  transition: background-image 0.5s ease;
 }
