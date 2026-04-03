@@ -1,65 +1,489 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Loader2,
+  Send,
+  Bot,
+  MessageSquare,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Check,
+  Sparkles,
+  Zap,
+  Brain,
+} from "lucide-react";
+
+interface ModelResponse {
+  model: string;
+  content: string;
+  loading: boolean;
+  error?: string;
+  latency?: number;
+  tokens?: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+}
+
+const AVAILABLE_MODELS = [
+  { id: "glm-latest", name: "GLM Latest", provider: "Zhipu", color: "bg-blue-600" },
+  { id: "kimi-latest", name: "Kimi Latest", provider: "Moonshot", color: "bg-purple-600" },
+  { id: "open-large", name: "Open Large", provider: "Juspay", color: "bg-indigo-600" },
+  { id: "open-fast", name: "Open Fast", provider: "Juspay", color: "bg-indigo-400" },
+  { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", provider: "Anthropic", color: "bg-orange-500" },
+  { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5 (Alias)", provider: "Anthropic", color: "bg-orange-400" },
+  { id: "claude-opus-4-5", name: "Claude Opus 4.5", provider: "Anthropic", color: "bg-orange-600" },
+  { id: "claude-opus-4-6", name: "Claude Opus 4.6", provider: "Anthropic", color: "bg-orange-700" },
+  { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", provider: "Anthropic", color: "bg-orange-300" },
+  { id: "claude-3-5-haiku@20241022", name: "Claude 3.5 Haiku", provider: "Anthropic", color: "bg-orange-350" },
+  { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku (Alias)", provider: "Anthropic", color: "bg-orange-200" },
+  { id: "gemini-3-pro-preview", name: "Gemini 3 Pro Preview", provider: "Google", color: "bg-teal-600" },
+  { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", provider: "Google", color: "bg-teal-500" },
+  { id: "gemini-embedding-001", name: "Gemini Embedding 001", provider: "Google", color: "bg-teal-400" },
+  { id: "minimaxai/minimax-m2", name: "MiniMax M2", provider: "MiniMax", color: "bg-rose-600" },
+  { id: "glm-flash-experimental", name: "GLM Flash Experimental", provider: "Zhipu", color: "bg-blue-400" },
+  { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", provider: "Anthropic", color: "bg-orange-550" },
+  { id: "gemini-3.1-pro", name: "Gemini 3.1 Pro", provider: "Google", color: "bg-teal-650" },
+];
 
 export default function Home() {
+  const [prompt, setPrompt] = useState("");
+  const [selectedModels, setSelectedModels] = useState<string[]>(["open-large", "claude-sonnet-4-6", "gemini-3-pro-preview"]);
+  const [responses, setResponses] = useState<ModelResponse[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiKey, setApiKey] = useState(process.env.NEXT_PUBLIC_LITELLM_API_KEY || "");
+  const [baseUrl, setBaseUrl] = useState(process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "http://localhost:4000");
+  const [copiedModel, setCopiedModel] = useState<string | null>(null);
+
+  const handleModelToggle = (modelId: string) => {
+    setSelectedModels((prev) =>
+      prev.includes(modelId)
+        ? prev.filter((m) => m !== modelId)
+        : [...prev, modelId]
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (!prompt.trim() || selectedModels.length === 0) return;
+
+    setIsLoading(true);
+    const initialResponses: ModelResponse[] = selectedModels.map((model) => ({
+      model,
+      content: "",
+      loading: true,
+    }));
+    setResponses(initialResponses);
+
+    const startTimes: Record<string, number> = {};
+
+    const promises = selectedModels.map(async (modelId) => {
+      startTimes[modelId] = Date.now();
+      try {
+        const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.7,
+            max_tokens: 2000,
+          }),
+        });
+
+        const latency = Date.now() - startTimes[modelId];
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || "No response";
+
+        setResponses((prev) =>
+          prev.map((r) =>
+            r.model === modelId
+              ? {
+                  ...r,
+                  content,
+                  loading: false,
+                  latency,
+                  tokens: data.usage,
+                }
+              : r
+          )
+        );
+      } catch (error) {
+        const latency = Date.now() - startTimes[modelId];
+        setResponses((prev) =>
+          prev.map((r) =>
+            r.model === modelId
+              ? {
+                  ...r,
+                  error: error instanceof Error ? error.message : "Unknown error",
+                  loading: false,
+                  latency,
+                }
+              : r
+          )
+        );
+      }
+    });
+
+    await Promise.all(promises);
+    setIsLoading(false);
+  };
+
+  const copyToClipboard = async (content: string, model: string) => {
+    await navigator.clipboard.writeText(content);
+    setCopiedModel(model);
+    setTimeout(() => setCopiedModel(null), 2000);
+  };
+
+  const getModelInfo = (modelId: string) =>
+    AVAILABLE_MODELS.find((m) => m.id === modelId) || {
+      name: modelId,
+      provider: "Unknown",
+      color: "bg-gray-500",
+    };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-100 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <div className="mb-4 flex items-center justify-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/25">
+              <Sparkles className="h-6 w-6 text-white" />
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+              Model Arena
+            </h1>
+          </div>
+          <p className="text-lg text-zinc-600 dark:text-zinc-400">
+            Compare outputs from multiple LLMs simultaneously
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {/* Configuration */}
+        <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
+          <CardContent className="pt-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  LiteLLM Base URL
+                </label>
+                <input
+                  type="text"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  placeholder="http://localhost:4000"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  API Key
+                </label>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  placeholder="sk-..."
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Model Selection */}
+        <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+              <Bot className="h-5 w-5 text-violet-500" />
+              Select Models ({selectedModels.length} selected)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {AVAILABLE_MODELS.map((model) => (
+                <button
+                  key={model.id}
+                  onClick={() => handleModelToggle(model.id)}
+                  className={`group relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                    selectedModels.includes(model.id)
+                      ? "bg-zinc-900 text-white shadow-lg shadow-zinc-900/25 dark:bg-zinc-100 dark:text-zinc-900 dark:shadow-zinc-100/10"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                  }`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${model.color}`} />
+                  <span>{model.name}</span>
+                  <span className="text-xs opacity-60">({model.provider})</span>
+                  {selectedModels.includes(model.id) && (
+                    <CheckCircle2 className="ml-1 h-3.5 w-3.5" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Prompt Input */}
+        <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+              <MessageSquare className="h-5 w-5 text-violet-500" />
+              Your Prompt
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Enter your prompt here... Compare how different models respond to the same question!"
+              className="min-h-[120px] w-full resize-y rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 placeholder-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-zinc-500">
+                {prompt.length} characters
+              </div>
+              <Button
+                onClick={handleSubmit}
+                disabled={!prompt.trim() || selectedModels.length === 0 || isLoading}
+                className="gap-2 bg-linear-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Compare Models
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Results */}
+        {responses.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                Results
+              </h2>
+              <Badge variant="secondary" className="text-sm">
+                {responses.filter((r) => !r.loading).length}/{responses.length} completed
+              </Badge>
+            </div>
+
+            <Tabs defaultValue="grid" className="w-full">
+              <TabsList className="mb-4">
+                <TabsTrigger value="grid" className="gap-2">
+                  <Zap className="h-4 w-4" />
+                  Grid View
+                </TabsTrigger>
+                <TabsTrigger value="list" className="gap-2">
+                  <Brain className="h-4 w-4" />
+                  List View
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="grid">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {responses.map((response) => {
+                    const modelInfo = getModelInfo(response.model);
+                    return (
+                      <Card
+                        key={response.model}
+                        className="flex flex-col border-zinc-200/50 bg-white/90 shadow-lg shadow-zinc-200/20 backdrop-blur-sm transition-all duration-300 hover:shadow-xl dark:border-zinc-800/50 dark:bg-zinc-900/90 dark:shadow-zinc-950/20"
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`h-3 w-3 rounded-full ${modelInfo.color}`} />
+                              <CardTitle className="text-base font-semibold">
+                                {modelInfo.name}
+                              </CardTitle>
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {modelInfo.provider}
+                            </Badge>
+                          </div>
+                          {response.latency && (
+                            <div className="mt-2 flex items-center gap-1 text-xs text-zinc-500">
+                              <Clock className="h-3 w-3" />
+                              {response.latency}ms
+                              {response.tokens && (
+                                <>
+                                  <Separator orientation="vertical" className="mx-1 h-3" />
+                                  {response.tokens.total} tokens
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </CardHeader>
+                        <CardContent className="flex-1">
+                          {response.loading ? (
+                            <div className="flex h-40 flex-col items-center justify-center gap-3">
+                              <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+                              <span className="text-sm text-zinc-500">Generating response...</span>
+                            </div>
+                          ) : response.error ? (
+                            <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+                              <AlertCircle className="h-8 w-8 text-red-500" />
+                              <span className="text-sm text-red-600">{response.error}</span>
+                            </div>
+                          ) : (
+                            <ScrollArea className="h-64">
+                              <div className="prose prose-sm max-w-none dark:prose-invert">
+                                <pre className="whitespace-pre-wrap wrap-break-word rounded-lg bg-zinc-50 p-4 text-sm text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                                  {response.content}
+                                </pre>
+                              </div>
+                            </ScrollArea>
+                          )}
+                        </CardContent>
+                        {response.content && !response.loading && (
+                          <div className="px-6 pb-4">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(response.content, response.model)}
+                              className="gap-2"
+                            >
+                              {copiedModel === response.model ? (
+                                <>
+                                  <Check className="h-4 w-4 text-green-500" />
+                                  Copied!
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-4 w-4" />
+                                  Copy
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="list">
+                <div className="space-y-4">
+                  {responses.map((response) => {
+                    const modelInfo = getModelInfo(response.model);
+                    return (
+                      <Card
+                        key={response.model}
+                        className="border-zinc-200/50 bg-white/90 shadow-lg shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/90 dark:shadow-zinc-950/20"
+                      >
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className={`h-4 w-4 rounded-full ${modelInfo.color}`} />
+                              <div>
+                                <CardTitle className="text-lg font-semibold">
+                                  {modelInfo.name}
+                                </CardTitle>
+                                <p className="text-sm text-zinc-500">{modelInfo.provider}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {response.latency && (
+                                <div className="flex items-center gap-1 text-sm text-zinc-500">
+                                  <Clock className="h-4 w-4" />
+                                  {response.latency}ms
+                                </div>
+                              )}
+                              {response.tokens && (
+                                <Badge variant="secondary">
+                                  {response.tokens.total} tokens
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          {response.loading ? (
+                            <div className="flex h-32 items-center justify-center gap-3">
+                              <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
+                              <span className="text-zinc-500">Generating response...</span>
+                            </div>
+                          ) : response.error ? (
+                            <div className="flex h-32 items-center justify-center gap-2 text-red-600">
+                              <AlertCircle className="h-5 w-5" />
+                              {response.error}
+                            </div>
+                          ) : (
+                            <div className="space-y-4">
+                              <pre className="whitespace-pre-wrap wrap-break-word rounded-lg bg-zinc-50 p-4 text-sm text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                                {response.content}
+                              </pre>
+                              <div className="flex justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyToClipboard(response.content, response.model)}
+                                  className="gap-2"
+                                >
+                                  {copiedModel === response.model ? (
+                                    <>
+                                      <Check className="h-4 w-4 text-green-500" />
+                                      Copied!
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="h-4 w-4" />
+                                      Copy Response
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="mt-12 text-center text-sm text-zinc-500">
+          <p>Powered by LiteLLM Proxy • Compare outputs from 100+ LLMs</p>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
