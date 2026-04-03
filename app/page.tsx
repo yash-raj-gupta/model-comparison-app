@@ -8,13 +8,6 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Loader2,
   Send,
   Bot,
@@ -28,6 +21,10 @@ import {
   Zap,
   Brain,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
 
 interface ModelResponse {
   model: string;
@@ -72,12 +69,18 @@ export default function Home() {
   const [baseUrl, setBaseUrl] = useState(process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "http://localhost:4000");
   const [copiedModel, setCopiedModel] = useState<string | null>(null);
 
+  const MAX_MODELS = 5;
+
   const handleModelToggle = (modelId: string) => {
-    setSelectedModels((prev) =>
-      prev.includes(modelId)
-        ? prev.filter((m) => m !== modelId)
-        : [...prev, modelId]
-    );
+    setSelectedModels((prev) => {
+      if (prev.includes(modelId)) {
+        return prev.filter((m) => m !== modelId);
+      }
+      if (prev.length >= MAX_MODELS) {
+        return prev;
+      }
+      return [...prev, modelId];
+    });
   };
 
   const handleSubmit = async () => {
@@ -184,38 +187,6 @@ export default function Home() {
             Compare outputs from multiple LLMs simultaneously
           </p>
         </div>
-
-        {/* Configuration */}
-        <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
-          <CardContent className="pt-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  LiteLLM Base URL
-                </label>
-                <input
-                  type="text"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                  placeholder="http://localhost:4000"
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  API Key
-                </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                  placeholder="sk-..."
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Model Selection */}
         <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
@@ -360,10 +331,34 @@ export default function Home() {
                             </div>
                           ) : (
                             <ScrollArea className="h-64">
-                              <div className="prose prose-sm max-w-none dark:prose-invert">
-                                <pre className="whitespace-pre-wrap wrap-break-word rounded-lg bg-zinc-50 p-4 text-sm text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                              <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mb-2 prose-headings:mt-4 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+                                      const match = /language-(\w+)/.exec(className || '');
+                                      return match ? (
+                                        <SyntaxHighlighter
+                                          style={oneDark}
+                                          language={match[1]}
+                                          PreTag="div"
+                                          {...props}
+                                        >
+                                          {String(children).replace(/\n$/, '')}
+                                        </SyntaxHighlighter>
+                                      ) : (
+                                        <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm font-mono text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200" {...props}>
+                                          {children}
+                                        </code>
+                                      );
+                                    },
+                                    p({ children }) {
+                                      return <p className="whitespace-pre-wrap">{children}</p>;
+                                    }
+                                  }}
+                                >
                                   {response.content}
-                                </pre>
+                                </ReactMarkdown>
                               </div>
                             </ScrollArea>
                           )}
@@ -444,9 +439,35 @@ export default function Home() {
                             </div>
                           ) : (
                             <div className="space-y-4">
-                              <pre className="whitespace-pre-wrap wrap-break-word rounded-lg bg-zinc-50 p-4 text-sm text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-                                {response.content}
-                              </pre>
+                              <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mb-2 prose-headings:mt-4 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+                                      const match = /language-(\w+)/.exec(className || '');
+                                      return match ? (
+                                        <SyntaxHighlighter
+                                          style={oneDark}
+                                          language={match[1]}
+                                          PreTag="div"
+                                          {...props}
+                                        >
+                                          {String(children).replace(/\n$/, '')}
+                                        </SyntaxHighlighter>
+                                      ) : (
+                                        <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm font-mono text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200" {...props}>
+                                          {children}
+                                        </code>
+                                      );
+                                    },
+                                    p({ children }) {
+                                      return <p className="whitespace-pre-wrap">{children}</p>;
+                                    }
+                                  }}
+                                >
+                                  {response.content}
+                                </ReactMarkdown>
+                              </div>
                               <div className="flex justify-end">
                                 <Button
                                   variant="ghost"

@@ -53,6 +53,10 @@ model-comparison-app/
 
 The single-page application containing all functionality:
 
+**Imports:**
+- ReactMarkdown with remark-gfm for GitHub-flavored markdown
+- Prism SyntaxHighlighter with oneDark theme for code blocks
+
 **State Management:**
 - `prompt` - User's input prompt
 - `selectedModels` - Array of selected model IDs (default: open-large, claude-sonnet-4-6, gemini-3-pro-preview)
@@ -60,6 +64,9 @@ The single-page application containing all functionality:
 - `isLoading` - Global loading state
 - `apiKey` / `baseUrl` - LiteLLM proxy credentials (with env defaults)
 - `copiedModel` - Tracks which response was copied
+
+**Constraints:**
+- `MAX_MODELS = 5` - Maximum number of models that can be selected at once
 
 **Supported Models:** 18 models from 5 providers:
 - **Anthropic**: Claude Sonnet 4.5, Claude Opus 4.5, Claude Opus 4.6, Claude Haiku variants
@@ -70,7 +77,7 @@ The single-page application containing all functionality:
 - **MiniMax**: MiniMax M2
 
 **Key Functions:**
-- `handleModelToggle(modelId)` - Add/remove models from selection
+- `handleModelToggle(modelId)` - Add/remove models from selection (enforces MAX_MODELS limit of 5)
 - `handleSubmit()` - Send parallel requests to all selected models via LiteLLM proxy
 - `copyToClipboard(content, model)` - Copy response text
 - `getModelInfo(modelId)` - Get display info for a model
@@ -86,12 +93,18 @@ Body: {
 }
 ```
 
+**Markdown Rendering:**
+The app renders LLM responses as formatted markdown with:
+- Syntax highlighting for code blocks (using Prism oneDark theme)
+- GitHub-flavored markdown support (tables, strikethrough, etc.)
+- Inline code styling with rounded backgrounds
+- Proper whitespace preservation for paragraph text
+
 **UI Sections:**
 1. Header - Title with Sparkles icon
-2. Configuration - Base URL and API key inputs
-3. Model Selection - Toggle buttons for all available models
-4. Prompt Input - Textarea with character count
-5. Results Display - Grid/List view tabs showing responses
+2. Model Selection - Toggle buttons for all available models (max 5)
+3. Prompt Input - Textarea with character count
+4. Results Display - Grid/List view tabs showing markdown-rendered responses
 
 ### 2. `app/layout.tsx` - Root Layout
 
