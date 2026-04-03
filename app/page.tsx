@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Loader2,
   Send,
@@ -20,6 +21,7 @@ import {
   Sparkles,
   Zap,
   Brain,
+  Info,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -44,16 +46,16 @@ const AVAILABLE_MODELS = [
   { id: "kimi-latest", name: "Kimi Latest", provider: "Moonshot", color: "bg-purple-600" },
   { id: "open-large", name: "Open Large", provider: "Juspay", color: "bg-indigo-600" },
   { id: "open-fast", name: "Open Fast", provider: "Juspay", color: "bg-indigo-400" },
-  { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", provider: "Anthropic", color: "bg-orange-500" },
-  { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5 (Alias)", provider: "Anthropic", color: "bg-orange-400" },
+  // { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", provider: "Anthropic", color: "bg-orange-500" },
+  { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", provider: "Anthropic", color: "bg-orange-400" },
   { id: "claude-opus-4-5", name: "Claude Opus 4.5", provider: "Anthropic", color: "bg-orange-600" },
   { id: "claude-opus-4-6", name: "Claude Opus 4.6", provider: "Anthropic", color: "bg-orange-700" },
   { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", provider: "Anthropic", color: "bg-orange-300" },
-  { id: "claude-3-5-haiku@20241022", name: "Claude 3.5 Haiku", provider: "Anthropic", color: "bg-orange-350" },
-  { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku (Alias)", provider: "Anthropic", color: "bg-orange-200" },
-  { id: "gemini-3-pro-preview", name: "Gemini 3 Pro Preview", provider: "Google", color: "bg-teal-600" },
+  // { id: "claude-3-5-haiku@20241022", name: "Claude 3.5 Haiku", provider: "Anthropic", color: "bg-orange-350" },
+  // { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku (Alias)", provider: "Anthropic", color: "bg-orange-200" },
+  // { id: "gemini-3-pro-preview", name: "Gemini 3 Pro Preview", provider: "Google", color: "bg-teal-600" },
   { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", provider: "Google", color: "bg-teal-500" },
-  { id: "gemini-embedding-001", name: "Gemini Embedding 001", provider: "Google", color: "bg-teal-400" },
+  // { id: "gemini-embedding-001", name: "Gemini Embedding 001", provider: "Google", color: "bg-teal-400" },
   { id: "minimaxai/minimax-m2", name: "MiniMax M2", provider: "MiniMax", color: "bg-rose-600" },
   { id: "glm-flash-experimental", name: "GLM Flash Experimental", provider: "Zhipu", color: "bg-blue-400" },
   { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", provider: "Anthropic", color: "bg-orange-550" },
@@ -62,12 +64,13 @@ const AVAILABLE_MODELS = [
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
-  const [selectedModels, setSelectedModels] = useState<string[]>(["open-large", "claude-sonnet-4-6", "gemini-3-pro-preview"]);
+  const [selectedModels, setSelectedModels] = useState<string[]>(["open-large", "claude-sonnet-4-6", "claude-sonnet-4-5"]);
   const [responses, setResponses] = useState<ModelResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [apiKey, setApiKey] = useState(process.env.NEXT_PUBLIC_LITELLM_API_KEY || "");
   const [baseUrl, setBaseUrl] = useState(process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "http://localhost:4000");
   const [copiedModel, setCopiedModel] = useState<string | null>(null);
+  const [showMaxModelsAlert, setShowMaxModelsAlert] = useState(false);
 
   const MAX_MODELS = 5;
 
@@ -77,6 +80,8 @@ export default function Home() {
         return prev.filter((m) => m !== modelId);
       }
       if (prev.length >= MAX_MODELS) {
+        setShowMaxModelsAlert(true);
+        setTimeout(() => setShowMaxModelsAlert(false), 3000);
         return prev;
       }
       return [...prev, modelId];
@@ -188,15 +193,29 @@ export default function Home() {
           </p>
         </div>
 
+        {/* Max Models Alert */}
+        {showMaxModelsAlert && (
+          <Alert className="mb-4 border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/50 dark:text-orange-200">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              You can only compare up to {MAX_MODELS} models at a time. Please deselect a model before selecting another.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Model Selection */}
         <Card className="mb-6 border-zinc-200/50 bg-white/80 shadow-xl shadow-zinc-200/20 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80 dark:shadow-zinc-950/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <Bot className="h-5 w-5 text-violet-500" />
-              Select Models ({selectedModels.length} selected)
+              Select Models ({selectedModels.length}/{MAX_MODELS} selected)
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+              <Info className="mr-1 inline h-4 w-4" />
+              You can select up to {MAX_MODELS} models to compare simultaneously per API key.
+            </p>
             <div className="flex flex-wrap gap-2">
               {AVAILABLE_MODELS.map((model) => (
                 <button
