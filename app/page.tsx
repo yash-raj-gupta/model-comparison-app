@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,9 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModeToggle } from "./components/mode-toggle";
 import {
   Loader2,
@@ -24,6 +27,11 @@ import {
   Zap,
   Brain,
   Info,
+  ArrowRight,
+  Trash2,
+  MessageCircle,
+  ChevronRight,
+  Plus,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -41,6 +49,19 @@ interface ModelResponse {
     completion: number;
     total: number;
   };
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  model: string;
+  messages: ChatMessage[];
+  createdAt: number;
 }
 
 const AVAILABLE_MODELS = [
@@ -73,6 +94,43 @@ export default function Home() {
   const [baseUrl, setBaseUrl] = useState(process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "http://localhost:4000");
   const [copiedModel, setCopiedModel] = useState<string | null>(null);
   const [showMaxModelsAlert, setShowMaxModelsAlert] = useState(false);
+
+  // Chat history state
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([]);
+  const [selectedHistoryChat, setSelectedHistoryChat] = useState<ChatSession | null>(null);
+
+  // Continue chat modal state
+  const [continueChatModel, setContinueChatModel] = useState<string | null>(null);
+  const [continueChatContext, setContinueChatContext] = useState<ChatMessage[]>([]);
+  const [continueChatPrompt, setContinueChatPrompt] = useState("");
+  const [isContinuingChat, setIsContinuingChat] = useState(false);
+  const [continueChatResponse, setContinueChatResponse] = useState<string>("");
+  const [continueChatError, setContinueChatError] = useState<string | null>(null);
+
+  // Full-screen chat modal state
+  const [fullScreenChat, setFullScreenChat] = useState<ChatSession | null>(null);
+  const [fullScreenModel, setFullScreenModel] = useState<string>("");
+  const [fullScreenPrompt, setFullScreenPrompt] = useState("");
+  const [fullScreenMessages, setFullScreenMessages] = useState<ChatMessage[]>([]);
+  const [isFullScreenLoading, setIsFullScreenLoading] = useState(false);
+  const [fullScreenError, setFullScreenError] = useState<string | null>(null);
+
+  // Load chat history from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("model-arena-history");
+    if (saved) {
+      try {
+        setChatHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load chat history:", e);
+      }
+    }
+  }, []);
+
+  // Save chat history to localStorage
+  useEffect(() => {
+    localStorage.setItem("model-arena-history", JSON.stringify(chatHistory));
+  }, [chatHistory]);
 
   const MAX_MODELS = 5;
 
@@ -176,6 +234,218 @@ export default function Home() {
       provider: "Unknown",
       color: "bg-gray-500",
     };
+
+  // Save chat to history after a successful response
+  const saveToHistory = (modelId: string, userPrompt: string, responseContent: string) => {
+    const modelInfo = getModelInfo(modelId);
+    const newSession: ChatSession = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      title: userPrompt.slice(0, 50) + (userPrompt.length > 50 ? "..." : ""),
+      model: modelId,
+      messages: [
+        { role: "user", content: userPrompt },
+        { role: "assistant", content: responseContent },
+      ],
+      createdAt: Date.now(),
+    };
+
+    setChatHistory((prev) => [newSession, ...prev]);
+  };
+
+  // Open continue chat modal
+  const openContinueChat = (modelId: string, userPrompt: string, responseContent: string) => {
+    const modelInfo = getModelInfo(modelId);
+    setContinueChatModel(modelId);
+    setContinueChatContext([
+      { role: "user", content: userPrompt },
+      { role: "assistant", content: responseContent },
+    ]);
+    setContinueChatPrompt("");
+    setContinueChatResponse("");
+    setContinueChatError(null);
+  };
+
+  // Handle continue chat submit
+  const handleContinueChat = async () => {
+    if (!continueChatPrompt.trim() || !continueChatModel) return;
+
+    setIsContinuingChat(true);
+    setContinueChatError(null);
+    setContinueChatResponse("");
+
+    try {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: continueChatModel,
+          messages: [...continueChatContext, { role: "user", content: continueChatPrompt }],
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || "No response";
+
+      setContinueChatResponse(content);
+
+      // Update chat history with new message
+      const updatedContext = [...continueChatContext, { role: "user" as const, content: continueChatPrompt }, { role: "assistant" as const, content }];
+      const modelInfo = getModelInfo(continueChatModel);
+
+      // Create a new session or update existing one
+      const existingSessionIndex = chatHistory.findIndex(
+        (s) => s.model === continueChatModel && s.messages.length === continueChatContext.length / 2
+      );
+
+      if (existingSessionIndex >= 0) {
+        // Update existing session
+        setChatHistory((prev) => {
+          const updated = [...prev];
+          updated[existingSessionIndex] = {
+            ...updated[existingSessionIndex],
+            messages: updated[existingSessionIndex].messages.concat([
+              { role: "user", content: continueChatPrompt },
+              { role: "assistant", content },
+            ]),
+          };
+          return updated;
+        });
+      } else {
+        // Create new session
+        const newSession: ChatSession = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          title: continueChatPrompt.slice(0, 50) + (continueChatPrompt.length > 50 ? "..." : ""),
+          model: continueChatModel,
+          messages: updatedContext,
+          createdAt: Date.now(),
+        };
+        setChatHistory((prev) => [newSession, ...prev]);
+      }
+    } catch (error) {
+      setContinueChatError(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsContinuingChat(false);
+    }
+  };
+
+  // Delete a chat from history
+  const deleteChat = (chatId: string) => {
+    setChatHistory((prev) => prev.filter((chat) => chat.id !== chatId));
+  };
+
+  // Load a chat from history
+  const loadChat = (chat: ChatSession) => {
+    setSelectedHistoryChat(chat);
+    setPrompt(chat.messages[0]?.content || "");
+    setSelectedModels([chat.model]);
+  };
+
+  // Close continue chat modal
+  const closeContinueChat = () => {
+    setContinueChatModel(null);
+    setContinueChatContext([]);
+    setContinueChatPrompt("");
+    setContinueChatResponse("");
+    setContinueChatError(null);
+  };
+
+  // Open full-screen chat
+  const openFullScreenChat = (chat: ChatSession) => {
+    setFullScreenChat(chat);
+    setFullScreenModel(chat.model);
+    setFullScreenMessages(chat.messages);
+    setFullScreenPrompt("");
+    setFullScreenError(null);
+  };
+
+  // Close full-screen chat
+  const closeFullScreenChat = () => {
+    setFullScreenChat(null);
+    setFullScreenModel("");
+    setFullScreenMessages([]);
+    setFullScreenPrompt("");
+    setFullScreenError(null);
+  };
+
+  // Send message in full-screen chat with optional model switch
+  const sendFullScreenMessage = async () => {
+    if (!fullScreenPrompt.trim() || !fullScreenModel) return;
+
+    const userMessage = fullScreenPrompt;
+    setIsFullScreenLoading(true);
+    setFullScreenError(null);
+
+    try {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: fullScreenModel,
+          messages: [...fullScreenMessages, { role: "user", content: userMessage }],
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantMessage = data.choices?.[0]?.message?.content || "No response";
+
+      const updatedMessages: ChatMessage[] = [
+        ...fullScreenMessages,
+        { role: "user", content: userMessage },
+        { role: "assistant", content: assistantMessage },
+      ];
+
+      setFullScreenMessages(updatedMessages);
+      setFullScreenPrompt("");
+
+      // Update chat in history
+      setChatHistory((prev) => {
+        const index = prev.findIndex((c) => c.id === fullScreenChat?.id);
+        if (index >= 0) {
+          const updated = [...prev];
+          updated[index] = {
+            ...updated[index],
+            messages: updatedMessages,
+            model: fullScreenModel,
+          };
+          return updated;
+        } else {
+          // Create new chat session
+          const newSession: ChatSession = {
+            id: fullScreenChat?.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            title: userMessage.slice(0, 50) + (userMessage.length > 50 ? "..." : ""),
+            model: fullScreenModel,
+            messages: updatedMessages,
+            createdAt: Date.now(),
+          };
+          return [newSession, ...prev];
+        }
+      });
+    } catch (error) {
+      setFullScreenError(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsFullScreenLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-100 transition-colors duration-500 ease-out dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
@@ -401,6 +671,10 @@ export default function Home() {
                   <Brain className="h-4 w-4" />
                   List View
                 </TabsTrigger>
+                <TabsTrigger value="history" className="gap-2">
+                  <MessageCircle className="h-4 w-4" />
+                  History
+                </TabsTrigger>
               </TabsList>
               </motion.div>
 
@@ -516,43 +790,60 @@ export default function Home() {
                         </CardContent>
                         {response.content && !response.loading && (
                           <div className="px-6 pb-4">
-                            <motion.div
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                            >
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => copyToClipboard(response.content, response.model)}
-                                className="gap-2"
+                            <div className="flex gap-2">
+                              <motion.div
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className="flex-1"
                               >
-                                <AnimatePresence mode="wait">
-                                  {copiedModel === response.model ? (
-                                    <motion.div
-                                      key="copied"
-                                      initial={{ scale: 0, opacity: 0 }}
-                                      animate={{ scale: 1, opacity: 1 }}
-                                      exit={{ scale: 0, opacity: 0 }}
-                                      className="flex items-center gap-2"
-                                    >
-                                      <Check className="h-4 w-4 text-green-500" />
-                                      Copied!
-                                    </motion.div>
-                                  ) : (
-                                    <motion.div
-                                      key="copy"
-                                      initial={{ scale: 0, opacity: 0 }}
-                                      animate={{ scale: 1, opacity: 1 }}
-                                      exit={{ scale: 0, opacity: 0 }}
-                                      className="flex items-center gap-2"
-                                    >
-                                      <Copy className="h-4 w-4" />
-                                      Copy
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-                              </Button>
-                            </motion.div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openContinueChat(response.model, prompt, response.content)}
+                                  className="gap-2 w-full"
+                                >
+                                  <MessageCircle className="h-4 w-4" />
+                                  Continue Chat
+                                </Button>
+                              </motion.div>
+                              <motion.div
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                              >
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyToClipboard(response.content, response.model)}
+                                  className="gap-2"
+                                >
+                                  <AnimatePresence mode="wait">
+                                    {copiedModel === response.model ? (
+                                      <motion.div
+                                        key="copied"
+                                        initial={{ scale: 0, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        exit={{ scale: 0, opacity: 0 }}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <Check className="h-4 w-4 text-green-500" />
+                                        Copied!
+                                      </motion.div>
+                                    ) : (
+                                      <motion.div
+                                        key="copy"
+                                        initial={{ scale: 0, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        exit={{ scale: 0, opacity: 0 }}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <Copy className="h-4 w-4" />
+                                        Copy
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </Button>
+                              </motion.div>
+                            </div>
                           </div>
                         )}
                       </Card>
@@ -645,7 +936,22 @@ export default function Home() {
                                   {response.content}
                                 </ReactMarkdown>
                               </div>
-                              <div className="flex justify-end">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Get the original prompt from the first response's context
+                                    const firstResponse = responses[0];
+                                    if (firstResponse) {
+                                      openContinueChat(response.model, prompt, response.content);
+                                    }
+                                  }}
+                                  className="gap-2"
+                                >
+                                  <MessageCircle className="h-4 w-4" />
+                                  Continue Chat
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -660,7 +966,7 @@ export default function Home() {
                                   ) : (
                                     <>
                                       <Copy className="h-4 w-4" />
-                                      Copy Response
+                                      Copy
                                     </>
                                   )}
                                 </Button>
@@ -674,10 +980,383 @@ export default function Home() {
                   })}
                 </div>
               </TabsContent>
+
+              <TabsContent value="history">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {chatHistory.length === 0 ? (
+                    <Card className="border-zinc-200/50 bg-white/80 dark:border-zinc-800/50 dark:bg-zinc-900/80">
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <MessageCircle className="h-12 w-12 text-zinc-300 dark:text-zinc-600 mb-4" />
+                        <p className="text-zinc-500 dark:text-zinc-400">No chat history yet</p>
+                        <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">
+                          Start a conversation and it will appear here
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-3">
+                      {chatHistory.map((chat, index) => {
+                        const modelInfo = getModelInfo(chat.model);
+                        return (
+                          <motion.div
+                            key={chat.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                          >
+                            <Card className="border-zinc-200/50 bg-white/80 shadow-sm backdrop-blur-sm transition-all hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80">
+                              <CardContent className="p-4">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div
+                                    className="flex-1 cursor-pointer"
+                                    onClick={() => openFullScreenChat(chat)}
+                                  >
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className={`h-2.5 w-2.5 rounded-full ${modelInfo.color}`} />
+                                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                                        {modelInfo.name}
+                                      </span>
+                                      <Badge variant="outline" className="text-xs">
+                                        {chat.messages.length / 2} messages
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2">
+                                      {chat.title}
+                                    </p>
+                                    <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
+                                      {new Date(chat.createdAt).toLocaleString()}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => openFullScreenChat(chat)}
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => deleteChat(chat.id)}
+                                      className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </motion.div>
+              </TabsContent>
             </Tabs>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Continue Chat Dialog */}
+        <Dialog open={!!continueChatModel} onOpenChange={(open) => !open && closeContinueChat()}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-violet-500" />
+                Continue Chat
+                {continueChatModel && (
+                  <Badge variant="outline" className="ml-2">
+                    {getModelInfo(continueChatModel).name}
+                  </Badge>
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                Continue your conversation with the selected model
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto space-y-4 py-4">
+              {/* Previous messages context */}
+              <div className="space-y-3">
+                {continueChatContext.map((msg, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-3 rounded-lg ${
+                      msg.role === "user"
+                        ? "bg-violet-50 dark:bg-violet-950/30 ml-8"
+                        : "bg-zinc-100 dark:bg-zinc-800 mr-8"
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                      {msg.role === "user" ? "You" : "Assistant"}
+                    </p>
+                    <div className="text-sm whitespace-pre-wrap">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+                            const match = /language-(\w+)/.exec(className || '');
+                            return match ? (
+                              <SyntaxHighlighter
+                                style={oneDark}
+                                language={match[1]}
+                                PreTag="div"
+                                {...props}
+                              >
+                                {String(children).replace(/\n$/, '')}
+                              </SyntaxHighlighter>
+                            ) : (
+                              <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm font-mono text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200" {...props}>
+                                {children}
+                              </code>
+                            );
+                          },
+                          p({ children }) {
+                            return <p className="whitespace-pre-wrap">{children}</p>;
+                          }
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* New response */}
+              {continueChatResponse && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-zinc-100 dark:bg-zinc-800 p-3 rounded-lg mr-8"
+                >
+                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-1">Assistant</p>
+                  <div className="text-sm whitespace-pre-wrap">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return match ? (
+                            <SyntaxHighlighter
+                              style={oneDark}
+                              language={match[1]}
+                              PreTag="div"
+                              {...props}
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-sm font-mono text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200" {...props}>
+                              {children}
+                            </code>
+                          );
+                        },
+                        p({ children }) {
+                          return <p className="whitespace-pre-wrap">{children}</p>;
+                        }
+                      }}
+                    >
+                      {continueChatResponse}
+                    </ReactMarkdown>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Error */}
+              {continueChatError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{continueChatError}</AlertDescription>
+                </Alert>
+              )}
+
+              {/* Loading */}
+              {isContinuingChat && (
+                <div className="flex items-center gap-2 text-zinc-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Thinking...</span>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="flex-col gap-3 sm:flex-col">
+              <Textarea
+                value={continueChatPrompt}
+                onChange={(e) => setContinueChatPrompt(e.target.value)}
+                placeholder="Ask a follow-up question..."
+                className="min-h-[80px] resize-none"
+                disabled={isContinuingChat}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleContinueChat();
+                  }
+                }}
+              />
+              <div className="flex gap-2 w-full">
+                <Button
+                  variant="outline"
+                  onClick={closeContinueChat}
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={handleContinueChat}
+                  disabled={!continueChatPrompt.trim() || isContinuingChat}
+                  className="flex-1 gap-2 bg-violet-600 hover:bg-violet-700"
+                >
+                  {isContinuingChat ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Send
+                    </>
+                  )}
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Full-Screen Chat Dialog */}
+        <Dialog open={!!fullScreenChat} onOpenChange={(open) => !open && closeFullScreenChat()}>
+          <DialogContent className="max-w-6xl h-[95vh] overflow-hidden flex flex-col p-0">
+            <DialogHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex-shrink-0">
+              <div className="flex items-center justify-between gap-4">
+                <DialogTitle className="flex items-center gap-3">
+                  <MessageCircle className="h-5 w-5 text-violet-500" />
+                  Chat Session
+                </DialogTitle>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">Model:</span>
+                  <Select value={fullScreenModel} onValueChange={(value) => setFullScreenModel(value || "")}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AVAILABLE_MODELS.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full ${model.color}`} />
+                            {model.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {fullScreenMessages.map((msg, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`p-4 rounded-lg ${
+                    msg.role === "user"
+                      ? "bg-violet-50 dark:bg-violet-950/30 ml-16"
+                      : "bg-zinc-100 dark:bg-zinc-800 mr-16"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase">
+                      {msg.role === "user" ? "You" : getModelInfo(fullScreenModel).name}
+                    </span>
+                  </div>
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return match ? (
+                            <SyntaxHighlighter
+                              style={oneDark}
+                              language={match[1]}
+                              PreTag="div"
+                              {...props}
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-sm font-mono text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200" {...props}>
+                              {children}
+                            </code>
+                          );
+                        },
+                        p({ children }) {
+                          return <p className="whitespace-pre-wrap">{children}</p>;
+                        }
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                </motion.div>
+              ))}
+
+              {isFullScreenLoading && (
+                <div className="flex items-center gap-2 text-zinc-500 p-4">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Thinking...</span>
+                </div>
+              )}
+
+              {fullScreenError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{fullScreenError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            <DialogFooter className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex-shrink-0">
+              <div className="flex gap-2 w-full">
+                <Textarea
+                  value={fullScreenPrompt}
+                  onChange={(e) => setFullScreenPrompt(e.target.value)}
+                  placeholder="Type your message... (Shift+Enter for new line)"
+                  className="min-h-[60px] resize-none flex-1"
+                  disabled={isFullScreenLoading}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendFullScreenMessage();
+                    }
+                  }}
+                />
+                <Button
+                  onClick={sendFullScreenMessage}
+                  disabled={!fullScreenPrompt.trim() || isFullScreenLoading}
+                  className="h-auto bg-violet-600 hover:bg-violet-700"
+                >
+                  {isFullScreenLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Footer */}
         <div className="mt-12 text-center text-sm text-zinc-500">
