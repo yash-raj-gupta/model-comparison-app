@@ -137,14 +137,14 @@ export function FullScreenChatDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <DialogContent className="max-w-6xl h-[95vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex-shrink-0">
+      <DialogContent className="   max-w-7xl! h-[95vh]!  border-0! overflow-hidden  flex flex-col p-2" showCloseButton={true}>
+        <DialogHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
           <div className="flex items-center justify-between gap-4">
             <DialogTitle className="flex items-center gap-3">
               <MessageCircle className="h-5 w-5 text-violet-500" />
               Chat Session
             </DialogTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mr-4">
               <span className="text-sm text-zinc-500 dark:text-zinc-400">Model:</span>
               <Select value={model} onValueChange={(value) => setModel(value || "")}>
                 <SelectTrigger className="w-48">
